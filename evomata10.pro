@@ -4,18 +4,26 @@ CONFIG -= app_bundle
 CONFIG -= qt
 CONFIG += c++11
 
-LIBS += -L/usr/local/lib \
+LIBS += \
     -lgpi \
-    -lphitron
+    -lphitron \
+    -lSDL2 \
+    -lGL \
+    -lGLU \
+    -lGLEW
 
 SOURCES += main.cpp \
     cell.cpp \
-    group.cpp
+    group.cpp \
+    draw.cpp \
+    window.cpp
 
 include(deployment.pri)
 qtcAddDeployment()
 
 HEADERS += \
     cell.h \
-    group.h
+    group.h \
+    draw.h \
+    window.h
 
