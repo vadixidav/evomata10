@@ -2,7 +2,7 @@
 #include <iostream>
 #include <GL/glu.h>
 
-ShaderProgram::ShaderProgram() {
+ShaderProgram::ShaderProgram(const std::string &name) : name(name) {
     program = glCreateProgram();
 }
 
@@ -10,8 +10,8 @@ ShaderProgram::~ShaderProgram() {
     glDeleteProgram(program);
 }
 
-Shader& ShaderProgram::addShader(GLenum type, const std::string &code) {
-    shaders.emplace_front(type, code);
+Shader& ShaderProgram::addShader(GLenum type, const std::string &name, const std::string &code) {
+    shaders.emplace_front(type, name, this->name, code);
     glAttachShader(program, shaders.front().shader);
     return shaders.front();
 }
@@ -84,7 +84,7 @@ void ShaderProgram::link() {
     GLint success;
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if (success != GL_TRUE) {
-        std::cerr << "Failed to link program:" << std::endl;
+        std::cerr << "Failed to link program: " << name << std::endl;
         if (!glIsProgram(program)) {
             std::cerr << "Failed to get program linker errors." << std::endl;
             exit(1);
@@ -113,7 +113,7 @@ void ShaderProgram::use() {
     glUseProgram(program);
 }
 
-Shader::Shader(GLenum type, const std::string &code) {
+Shader::Shader(GLenum type, const std::string &name, const std::string &progName, const std::string &code) {
     shader = glCreateShader(type);
     
     GLchar *source = (GLchar*)code.c_str();
@@ -123,7 +123,7 @@ Shader::Shader(GLenum type, const std::string &code) {
     GLint compiled;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (compiled != GL_TRUE) {
-        std::cerr << "Failed to compile vertex shader:" << std::endl;
+        std::cerr << "Failed to compile shader \"" << name << "\" from program \"" << progName << "\":" << std::endl;
         if (!glIsShader(shader)) {
             std::cerr << "Failed to get shader compile error." << std::endl;
             exit(1);
@@ -254,6 +254,12 @@ void UBO::bind(GLuint index) {
     glBindBufferBase(GL_UNIFORM_BUFFER, index, bo.bo);
 }
 
+TBO::TBO(GLsizeiptr size, const GLvoid *data, GLenum usage) : texture(GL_TEXTURE_BUFFER),
+         buffer(GL_ARRAY_BUFFER, size, data, usage) {
+    texture.bind();
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, buffer.bo);
+}
+
 VAO::VAO() {
     glGenVertexArrays(1, &vao);
     bind();
@@ -329,4 +335,144 @@ void Renderer::bind(Window &window) {
     }
 }
 
+GroupRenderer::GroupRenderer(unsigned width, unsigned height) : orbProgram("Orbs"), screenProgram("Screen"),
+                             orbFrame(GL_TEXTURE_2D), buffer(DRAWABLES*7*sizeof(GLfloat), nullptr, GL_STREAM_DRAW) {
+    orbProgram.addShader(GL_VERTEX_SHADER, "Vertex Main",
+R"(#version 140
+in vec2 pos;
+smooth out vec2 inter;
+uniform float ratio;
 
+void main() {
+    inter = pos;
+    inter.x *= ratio;
+    gl_Position = vec4(pos.x, pos.y, 0, 1);
+})");
+    orbProgram.addShader(GL_FRAGMENT_SHADER, "Fragment Main",
+R"(#version 140
+precision highp float;
+smooth in vec2 inter;
+out vec4 finalColor;
+uniform samplerBuffer orbs;
+uniform int count;
+
+void main() {
+    vec3 color = vec3(0.0, 0.0, 0.0);
+    int i;
+    for (i = 0; i != count; i++) {
+        vec3 delta = vec3(texelFetch(orbs, i*7+0).r - inter.x,
+                          texelFetch(orbs, i*7+1).r - inter.y,
+                          texelFetch(orbs, i*7+2).r);
+        float dis2DSquared = delta.x * delta.x + delta.y * delta.y;
+        float zSquared = delta.z * delta.z;
+        float dis3DSquared = dis2DSquared + zSquared;
+        float radius = texelFetch(orbs, i*7+6).r;
+        if (dis3DSquared < radius * radius) {
+            vec3 orbColor = vec3(texelFetch(orbs, i*7+3).r,
+                                 texelFetch(orbs, i*7+4).r,
+                                 texelFetch(orbs, i*7+5).r);
+            //Adjusted for ring
+            float radius2DSquared = radius * radius - zSquared;
+            float radius2DSquaredAdjusted = radius2DSquared * 0.5;
+            if (dis2DSquared < radius2DSquaredAdjusted)
+                color += orbColor * (sqrt(radius2DSquaredAdjusted) - sqrt(dis2DSquared)) / radius;
+            else {
+                float radius2D = sqrt(radius2DSquared);
+                float adjusted2D = sqrt(radius2DSquaredAdjusted);
+                //Get positive distance from adjusted radius
+                float disAdjusted =
+                        0.5 * abs(abs(2.0 * sqrt(dis2DSquared) - radius2D - adjusted2D) + adjusted2D - radius2D);
+                color -= orbColor * disAdjusted / radius;
+            }
+        }
+    }
+    
+    finalColor.rgb = color;
+})");
+    orbProgram.link();
+    
+    screenProgram.addShader(GL_VERTEX_SHADER, "Vertex Main",
+R"(#version 140
+in vec2 pos;
+smooth out vec2 inter;
+void main() {
+    inter = pos;
+    inter += vec2(1.0, 1.0);
+    inter /= vec2(2.0, 2.0);
+    gl_Position = vec4(pos.x, pos.y, 0, 1);
+})");
+    screenProgram.addShader(GL_FRAGMENT_SHADER, "Fragment Main",
+R"(#version 140
+precision highp float;
+smooth in vec2 inter;
+out vec4 color;
+uniform float gamma;
+uniform sampler2D linear;
+
+void main() {
+    color.rgb = pow(abs(texture(linear, inter).rgb), vec3(1.0/gamma, 1.0/gamma, 1.0/gamma));
+    color.a = 1.0;
+})");
+    screenProgram.link();
+    
+    const float vertices[] = {1, 1, -1, 1, -1, -1, 1, -1};
+    
+    orbVAO.bind();
+    orbVAO.addAttribute(orbVAO.addVertexBuffer(sizeof(vertices), vertices, GL_STATIC_DRAW),
+                        orbProgram.getAttributeLocation("pos"), 2, GL_FLOAT);
+    orbVAO.unbind();
+    
+    screenVAO.bind();
+    screenVAO.addAttribute(screenVAO.addVertexBuffer(sizeof(vertices), vertices, GL_STATIC_DRAW),
+                           screenProgram.getAttributeLocation("pos"), 2, GL_FLOAT);
+    screenVAO.unbind();
+    
+    orbFrame.bind();
+    orbFrame.colors.setParam(GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    orbFrame.colors.setParam(GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    orbFrame.colors.bind();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_UNSIGNED_INT, nullptr);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, orbFrame.colors.texture, 0);
+    
+    screenProgram.setUniform("gamma", 2.2f);
+    screenProgram.setUniform("linear", 0);
+    orbProgram.setUniform("ratio", float(width)/float(height));
+    
+    /*
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE);
+    glBlendEquationSeparate(GL_FUNC_ADD, GL_MAX);*/
+    
+    orbsLocation = orbProgram.getUniformLocation("orbs");
+    countLocation = orbProgram.getUniformLocation("count");
+}
+
+void GroupRenderer::render(unsigned total, unsigned width, unsigned height) {
+    //Draw orbs
+    //FBO::bindDefault();
+    orbProgram.use();
+    orbFrame.colors.unbind();
+    orbFrame.bind();
+    glActiveTexture(GL_TEXTURE0);
+    buffer.texture.bind();
+    glViewport(0, 0, width, height);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    orbVAO.bind();
+        orbProgram.setUniform(countLocation, (int)total);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    orbVAO.unbind();
+    
+    //Draw screen
+    
+    screenProgram.use();
+    FBO::bindDefault();
+    glActiveTexture(GL_TEXTURE0);
+    orbFrame.colors.bind();
+    glViewport(0, 0, width, height);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    screenVAO.bind();
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    screenVAO.unbind();
+}
