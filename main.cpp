@@ -4,12 +4,15 @@
 #include "window.h"
 #include "draw.h"
 #include <chrono>
+#include <thread>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
 //Amount of particles in test simulation
-#define OBJECTS 512
+#define OBJECTS 128
+
+#define FPS 20
 
 using namespace std;
 using namespace chrono;
@@ -76,11 +79,13 @@ int main() {
         
         gr.render(OBJECTS, WINDOW_WIDTH, WINDOW_HEIGHT);
         
-        window.flip();
-        
+        this_thread::sleep_until(lastTime + duration<double>(1.0/FPS));
         steady_clock::time_point thisTime = steady_clock::now();
-        cout << "FPS: " << (1.0/duration_cast<duration<double>>(thisTime - lastTime).count()) << endl;
+        double timeDelta = duration_cast<duration<double>>(thisTime - lastTime).count();
+        cout << "FPS: " << (1.0/timeDelta) << endl;
         lastTime = thisTime;
+        
+        window.flip();
     }
     return 0;
 }
