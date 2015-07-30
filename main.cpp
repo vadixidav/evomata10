@@ -57,10 +57,11 @@ int main() {
         }
         
         #pragma omp parallel for
-        for (unsigned i = 0; i < OBJECTS; i++)
-            for (unsigned j = 0; j != OBJECTS; j++)
+        for (int i = 0; i != OBJECTS; i++)
+            particles[i].gravitate(0.1, phi::V3(0, 0, 0), 0.1);
+            /*for (int j = 0; j != OBJECTS; j++)
                 if (i != j)
-                    particles[i].gravitate(0.0001, particles[j].position, 0.1);
+                    particles[i].gravitate(0.0001, particles[j].position, 0.1);*/
         
         for (unsigned i = 0; i != OBJECTS; i++) {
             particles[i].advance();
