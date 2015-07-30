@@ -254,10 +254,10 @@ void UBO::bind(GLuint index) {
     glBindBufferBase(GL_UNIFORM_BUFFER, index, bo.bo);
 }
 
-TBO::TBO(GLsizeiptr size, const GLvoid *data, GLenum usage) : texture(GL_TEXTURE_BUFFER),
+TBO::TBO(GLsizeiptr size, GLenum format, const GLvoid *data, GLenum usage) : texture(GL_TEXTURE_BUFFER),
          buffer(GL_ARRAY_BUFFER, size, data, usage) {
     texture.bind();
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, buffer.bo);
+    glTexBuffer(GL_TEXTURE_BUFFER, format, buffer.bo);
 }
 
 VAO::VAO() {
@@ -336,7 +336,7 @@ void Renderer::bind(Window &window) {
 }
 
 GroupRenderer::GroupRenderer(unsigned width, unsigned height) : orbProgram("Orbs"), screenProgram("Screen"),
-                             orbFrame(GL_TEXTURE_2D), buffer(DRAWABLES*7*sizeof(GLfloat), nullptr, GL_STREAM_DRAW) {
+                             orbFrame(GL_TEXTURE_2D), buffer(DRAWABLES*7*2, GL_R16F, nullptr, GL_STREAM_DRAW) {
     orbProgram.addShader(GL_VERTEX_SHADER, "Vertex Main",
 R"(#version 140
 in vec2 pos;

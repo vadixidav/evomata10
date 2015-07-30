@@ -14,6 +14,11 @@
 using namespace std;
 using namespace chrono;
 
+uint16_t toHalfFloat(float x) {
+    uint32_t &f = reinterpret_cast<uint32_t&>(x);
+    return ((f >> 16) & 0x8000) | ((((f & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((f >> 13) & 0x03ff);
+}
+
 int main() {
     Window window("testing", WINDOW_WIDTH, WINDOW_HEIGHT);
     Renderer renderer(window);
@@ -37,7 +42,7 @@ int main() {
         colors[i] *= 1;
     }
     
-    float *posbuffer = (float*)gr.buffer.buffer.map(GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT);
+    uint16_t *posbuffer = (uint16_t*)gr.buffer.buffer.map(GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT);
     
     while (true) {
         SDL_Event event;
@@ -54,15 +59,15 @@ int main() {
             }
             particles[i].advance();
             
-            posbuffer[i*7 + 0] = particles[i].position.x;
-            posbuffer[i*7 + 1] = particles[i].position.y;
-            posbuffer[i*7 + 2] = particles[i].position.z;
+            posbuffer[i*7 + 0] = toHalfFloat(particles[i].position.x);
+            posbuffer[i*7 + 1] = toHalfFloat(particles[i].position.y);
+            posbuffer[i*7 + 2] = toHalfFloat(particles[i].position.z);
             
-            posbuffer[i*7 + 3] = colors[i].x;
-            posbuffer[i*7 + 4] = colors[i].y;
-            posbuffer[i*7 + 5] = colors[i].z;
+            posbuffer[i*7 + 3] = toHalfFloat(colors[i].x);
+            posbuffer[i*7 + 4] = toHalfFloat(colors[i].y);
+            posbuffer[i*7 + 5] = toHalfFloat(colors[i].z);
             
-            posbuffer[i*7 + 6] = 0.1;
+            posbuffer[i*7 + 6] = toHalfFloat(0.1);
         }
         
         gr.buffer.buffer.sync();

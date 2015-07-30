@@ -101,7 +101,7 @@ struct TBO {
     Texture texture;
     BO buffer;
     
-    TBO(GLsizeiptr size, const GLvoid *data, GLenum usage);
+    TBO(GLsizeiptr size, GLenum format, const GLvoid *data, GLenum usage);
 };
 
 //Render Buffer Object
