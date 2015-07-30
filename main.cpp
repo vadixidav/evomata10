@@ -9,7 +9,7 @@
 #define WINDOW_HEIGHT 600
 
 //Amount of particles in test simulation
-#define OBJECTS 128
+#define OBJECTS 512
 
 using namespace std;
 using namespace chrono;
@@ -53,12 +53,14 @@ int main() {
             }
         }
         
+        #pragma omp parallel for
+        for (unsigned i = 0; i < OBJECTS; i++)
+            for (unsigned j = 0; j != OBJECTS; j++)
+                if (i != j)
+                    particles[i].gravitate(0.0001, particles[j].position, 0.1);
+        
         for (unsigned i = 0; i != OBJECTS; i++) {
-            for (unsigned j = i + 1; j != OBJECTS; j++) {
-                phi::attract(0.0001, particles[i], particles[j], 0.1);
-            }
             particles[i].advance();
-            
             posbuffer[i*7 + 0] = toHalfFloat(particles[i].position.x);
             posbuffer[i*7 + 1] = toHalfFloat(particles[i].position.y);
             posbuffer[i*7 + 2] = toHalfFloat(particles[i].position.z);
