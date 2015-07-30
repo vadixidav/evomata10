@@ -57,11 +57,12 @@ int main() {
         }
         
         #pragma omp parallel for
-        for (int i = 0; i != OBJECTS; i++)
-            particles[i].gravitate(0.1, phi::V3(0, 0, 0), 0.1);
-            /*for (int j = 0; j != OBJECTS; j++)
+        for (int i = 0; i != OBJECTS; i++) {
+            //particles[i].gravitate(0.1, phi::V3(0, 0, 0), 0.1);
+            for (int j = 0; j != OBJECTS; j++)
                 if (i != j)
-                    particles[i].gravitate(0.0001, particles[j].position, 0.1);*/
+                    particles[i].gravitate(0.0001, particles[j].position, 0.1);
+        }
         
         for (unsigned i = 0; i != OBJECTS; i++) {
             particles[i].advance();
@@ -80,8 +81,8 @@ int main() {
         
         gr.render(OBJECTS, WINDOW_WIDTH, WINDOW_HEIGHT);
         
-        this_thread::sleep_until(lastTime + duration<double>(1.0/FPS));
         steady_clock::time_point thisTime = steady_clock::now();
+        this_thread::sleep_for(lastTime - thisTime + duration<double>(1.0/FPS));
         double timeDelta = duration_cast<duration<double>>(thisTime - lastTime).count();
         cout << "FPS: " << (1.0/timeDelta) << endl;
         lastTime = thisTime;
