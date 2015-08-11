@@ -140,6 +140,10 @@ void Cell::solveNeighbor() {
         if (!std::isnormal(n.decision.force))
             n.decision.force = 0;
         n.decision.send = neighborProgram.solveOutput(4, inputs);
+        if (!std::isnormal(n.decision.send))
+            n.decision.send = 0;
+        if (std::abs(n.decision.send) > CELL_MAX_SENDABLE_FOOD)
+            n.decision.send = CELL_MAX_SENDABLE_FOOD;
         //Update neighbor decision persistent values
         for (int i = 0; i != CELL_NEIGHBOR_PERSISTENT_VALUES; i++)
             n.decision.values[i] = neighborProgram.solveOutput(CELL_NEIGHBOR_STATIC_OUTPUTS + i, inputs);
@@ -156,28 +160,28 @@ void Cell::totalConsumptions() {
     //We also die if somebody has eaten us
     if (changes.eatenBy != 0) {
         changes.death = true;
-        std::cerr << "Cell was eaten!" << std::endl;
+        //std::cerr << "Cell was eaten!" << std::endl;
         return;
     }
     uint64_t sentFood = 0;
     for (Neighbor &n : neighbors) {
         if (n.decision.eat)
             food += n.neighbor->food/n.neighbor->changes.eatenBy;
-        if (n.decision.send > 0)
-            sentFood += uint64_t(n.decision.send);
+        sentFood += std::abs(n.decision.send);
     }
     
     if (sentFood >= food) {
         changes.death = true;
-        std::cerr << "Cell sent too much food!" << std::endl;
+        //std::cerr << "Cell sent too much food!" << std::endl;
         return;
     }
     food -= sentFood;
 }
 
 void Cell::accumulateSentFood() {
-    for (Neighbor &n : neighbors)
-        food += n.neighborsDecision->decision.send;
+    for (Neighbor &n : neighbors) {
+        food += std::abs(n.neighborsDecision->decision.send);
+    }
 }
 
 void Cell::decideMate() {
@@ -192,7 +196,7 @@ void Cell::decideMate() {
 
 void Cell::handleStarve() {
     if (food < CELL_TURN_FOOD_COST) {
-        std::cerr << "Cell starved!" << std::endl;
+        //std::cerr << "Cell starved!" << std::endl;
         changes.death = true;
         return;
     }

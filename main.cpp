@@ -31,7 +31,7 @@ int main() {
     
     steady_clock::time_point lastTime = steady_clock::now();
     
-    Group group(phi::V3(1.0, 1.0, 0.05), 3);
+    Group group(phi::V3(1.0, 1.0, 0.05), 1);
     
     uint16_t *posbuffer = (uint16_t*)gr.buffer.buffer.map(GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT);
     
@@ -44,8 +44,8 @@ int main() {
             }
         }
         
-        //group.spawn(group.rand() % 10 == 0);
-        group.spawn(2);
+        group.spawn(group.rand() % 8 == 0);
+        //group.spawn(1);
         group.update();
         
         {
