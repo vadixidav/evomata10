@@ -319,10 +319,11 @@ Renderer::Renderer(Window &window) {
         exit(1);
     }
     
+    /*
     if (SDL_GL_SetSwapInterval(1) < 0) {
         std::cerr << "Failed to enable VSync: " << SDL_GetError() << std::endl;
         exit(1);
-    }
+    }*/
 }
 
 Renderer::~Renderer() {
@@ -362,7 +363,7 @@ void main() {
     for (i = 0; i != count; i++) {
         vec3 delta = vec3(texelFetch(orbs, i*7+0).r - inter.x,
                           texelFetch(orbs, i*7+1).r - inter.y,
-                          texelFetch(orbs, i*7+2).r);
+                          texelFetch(orbs, i*7+2).r - 0.05);
         float dis2DSquared = delta.x * delta.x + delta.y * delta.y;
         float zSquared = delta.z * delta.z;
         float dis3DSquared = dis2DSquared + zSquared;
@@ -448,8 +449,11 @@ void main() {
 }
 
 void GroupRenderer::render(unsigned total, unsigned width, unsigned height) {
+    if (total > DRAWABLES) {
+        std::cerr << "GroupRenderer: Tried to draw too many things!" << std::endl;
+        exit(1);
+    }
     //Draw orbs
-    //FBO::bindDefault();
     orbProgram.use();
     orbFrame.colors.unbind();
     orbFrame.bind();

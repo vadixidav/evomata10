@@ -2,6 +2,7 @@
 #include "gpi/gpi.h"
 #include "phitron/phitron.h"
 #include "window.h"
+#include "group.h"
 #include "draw.h"
 #include <chrono>
 #include <thread>
@@ -10,9 +11,9 @@
 #define WINDOW_HEIGHT 600
 
 //Amount of particles in test simulation
-#define OBJECTS 128
+#define OBJECTS 64
 
-#define FPS 20
+#define FPS 30
 
 using namespace std;
 using namespace chrono;
@@ -30,20 +31,7 @@ int main() {
     
     steady_clock::time_point lastTime = steady_clock::now();
     
-    phi::P3 particles[OBJECTS];
-    phi::V3 colors[OBJECTS];
-    
-    std::mt19937 rand(3);
-    
-    for (unsigned i = 0; i != OBJECTS; i++) {
-        particles[i].position = phi::V3(rand()/double(rand.max())*2-1, rand()/double(rand.max())*2-1, rand()/double(rand.max())/8);
-        particles[i].velocity = phi::V3(rand()/double(rand.max())*2-1, rand()/double(rand.max())*2-1, rand()/double(rand.max())*2-1);
-        particles[i].velocity *= 0.0005;
-        particles[i].inertia = 100.0;
-        
-        colors[i] = phi::V3(rand()/double(rand.max()), rand()/double(rand.max()), rand()/double(rand.max()));
-        colors[i] *= 1;
-    }
+    Group group(phi::V3(1.0, 1.0, 0.05), 3);
     
     uint16_t *posbuffer = (uint16_t*)gr.buffer.buffer.map(GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT);
     
@@ -56,35 +44,36 @@ int main() {
             }
         }
         
-        #pragma omp parallel for
-        for (int i = 0; i < OBJECTS; i++) {
-            //particles[i].gravitate(0.1, phi::V3(0, 0, 0), 0.1);
-            for (int j = 0; j < OBJECTS; j++)
-                if (i != j)
-                    particles[i].gravitate(0.0001, particles[j].position, 0.1);
-        }
+        //group.spawn(group.rand() % 10 == 0);
+        group.spawn(2);
+        group.update();
         
-        for (unsigned i = 0; i != OBJECTS; i++) {
-            particles[i].advance();
-            posbuffer[i*7 + 0] = toHalfFloat(particles[i].position.x);
-            posbuffer[i*7 + 1] = toHalfFloat(particles[i].position.y);
-            posbuffer[i*7 + 2] = toHalfFloat(particles[i].position.z);
-            
-            posbuffer[i*7 + 3] = toHalfFloat(colors[i].x);
-            posbuffer[i*7 + 4] = toHalfFloat(colors[i].y);
-            posbuffer[i*7 + 5] = toHalfFloat(colors[i].z);
-            
-            posbuffer[i*7 + 6] = toHalfFloat(0.1);
+        {
+            unsigned index;
+            auto i = group.cells.begin();
+            for (index = 0; i != group.cells.end(); i++, index++) {
+                Cell &c = *i;
+                posbuffer[index * 7 + 0] = toHalfFloat(c.particle.position.x);
+                posbuffer[index * 7 + 1] = toHalfFloat(c.particle.position.y);
+                posbuffer[index * 7 + 2] = toHalfFloat(c.particle.position.z);
+                
+                posbuffer[index * 7 + 3] = toHalfFloat(((c.species & 0xFF << 0) >> 0) / double(0xFF));
+                posbuffer[index * 7 + 4] = toHalfFloat(((c.species & 0xFF << 8) >> 8) / double(0xFF));
+                posbuffer[index * 7 + 5] = toHalfFloat(((c.species & 0xFF << 16) >> 16) / double(0xFF));
+                
+                posbuffer[index * 7 + 6] = toHalfFloat(0.1);
+            }
         }
         
         gr.buffer.buffer.sync();
         
-        gr.render(OBJECTS, WINDOW_WIDTH, WINDOW_HEIGHT);
+        gr.render(group.cells.size(), WINDOW_WIDTH, WINDOW_HEIGHT);
         
+        this_thread::sleep_until(lastTime + duration<double>(1.0/FPS));
         steady_clock::time_point thisTime = steady_clock::now();
-        this_thread::sleep_for(lastTime - thisTime + duration<double>(1.0/FPS));
         double timeDelta = duration_cast<duration<double>>(thisTime - lastTime).count();
         cout << "FPS: " << (1.0/timeDelta) << endl;
+        cout << "Count: " << (group.cells.size()) << endl;
         lastTime = thisTime;
         
         window.flip();

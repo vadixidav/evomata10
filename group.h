@@ -14,11 +14,11 @@ struct Group {
     void spawn(unsigned amnt);
     
     void updateDeaths();
-    void updatePhysics();
     
+    //Wrap an origin-centered vector based on the dimensions; changes referenced vector
     void wrapVector(phi::V3 &delta);
-    void wrapPosition(phi::V3 &position);
-    bool isValid(phi::V3 &position);
+    //Determine if the vector is a valid origin-centered vector based on the dimensions
+    bool isValid(const phi::V3 &delta);
     
     void processPhysics(Cell &c);
 };
