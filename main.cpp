@@ -44,7 +44,7 @@ int main() {
             }
         }
         
-        group.spawn(group.rand() % 8 == 0);
+        group.spawn(group.rand() % 4 == 0);
         //group.spawn(1);
         group.update();
         

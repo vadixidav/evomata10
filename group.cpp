@@ -123,6 +123,10 @@ void Group::update() {
             dis /= 2;
             //Add it to the original position
             dis += c.particle.position;
+            //Randomly move the cell in the area to create randomness
+            dis += phi::V3(balancedRand(rand) * CELL_CONNECT_DISTANCE,
+                           balancedRand(rand) * CELL_CONNECT_DISTANCE,
+                           balancedRand(rand) * CELL_CONNECT_DISTANCE);
             //Finally wrap the new vector that is between the previous vectors
             wrapVector(dis);
             //Make the new cell using the computed
