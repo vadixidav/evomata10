@@ -15,14 +15,25 @@ double balancedRand(std::mt19937 &rand) {
 Group::Group(const phi::V3 &dimensions, uint32_t seed) : dimensions(dimensions), rand(seed) {
 }
 
+double Group::distanceSquared(const Cell &a, const Cell &b) {
+    phi::V3 dis = b.particle.position;
+    dis -= a.particle.position;
+    wrapVector(dis);
+    return dis.magnitudeSquared();
+}
+
 void Group::update() {
     //Clear cells
     for (Cell &c : cells)
-        c.clear();
+        c.thread = std::thread(&Cell::clear, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Run cell persistent programs
     for (Cell &c : cells)
-        c.solvePersistent();
+        c.thread = std::thread(&Cell::solvePersistent, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Connect cells that request it
     for (auto i = cells.begin(); i != cells.end(); i++) {
@@ -38,7 +49,7 @@ void Group::update() {
                     dis -= j->particle.position;
                     wrapVector(dis);
                     //If radius is less than the connection distance
-                    if (dis.magnitudeSquared() < CELL_CONNECT_DISTANCE * CELL_CONNECT_DISTANCE)
+                    if (dis.magnitudeSquared() < PHYSICS_CONNECT_DISTANCE * PHYSICS_CONNECT_DISTANCE)
                         //Connect these two cells
                         connect(c, *j);
                 }
@@ -46,49 +57,68 @@ void Group::update() {
         }
     }
     
+    //Find all cell distances
+    for (Cell &c : cells) {
+        c.thread = std::thread([&c, this](){
+            for (Neighbor &n : c.neighbors) {
+                phi::V3 dis = n.neighbor->particle.position;
+                dis -= c.particle.position;
+                wrapVector(dis);
+                n.distance = dis.magnitude();
+            }
+        });
+    }
+    for (Cell &c : cells)
+        c.thread.join();
+    
     //Run cell signal programs
     for (Cell &c : cells)
-        c.solveSignal();
+        c.thread = std::thread(&Cell::solveSignal, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Run cell neighbor programs
-    for (Cell &c : cells) {
-        //Solve distances
-        for (Neighbor &n : c.neighbors) {
-            phi::V3 dis = n.neighbor->particle.position;
-            dis -= c.particle.position;
-            wrapVector(dis);
-            n.distance = dis.magnitude();
-        }
-        c.solveNeighbor();
-    }
+    for (Cell &c : cells)
+        c.thread = std::thread(&Cell::solveNeighbor, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Compute consumptions
     for (Cell &c : cells)
-        c.enumerateConsumptions();
+        c.thread = std::thread(&Cell::enumerateConsumptions, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Determine results of consumptions
     for (Cell &c : cells)
-        c.totalConsumptions();
+        c.thread = std::thread(&Cell::totalConsumptions, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Kill off cells that were consumed
     updateDeaths();
     
     //For cells that are still alive, send and recieve food
     for (Cell &c : cells)
-        c.accumulateSentFood();
+        c.thread = std::thread(&Cell::accumulateSentFood, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Apply the food cost to exist
     for (Cell &c : cells)
-        c.handleStarve();
+        c.thread = std::thread(&Cell::handleStarve, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Kill off cells that starved
     updateDeaths();
     
-    //Disconnect all cells that ask to be disconnected
+    //Disconnect all cells that ask to be disconnected or that are too far
     for (Cell &c : cells) {
         for (auto i = c.neighbors.begin(); i != c.neighbors.end(); ) {
             Neighbor &n = *i;
-            if (n.decision.sever) {
+            if (n.decision.sever || distanceSquared(c, *n.neighbor) >
+                    PHYSICS_DISCONNECT_DISTANCE * PHYSICS_DISCONNECT_DISTANCE) {
                 n.neighbor->neighbors.erase(n.neighborsDecision);
                 i = c.neighbors.erase(i);
             } else {
@@ -99,7 +129,9 @@ void Group::update() {
     
     //Determine what the actual mate will be
     for (Cell &c : cells)
-        c.decideMate();
+        c.thread = std::thread(&Cell::decideMate, &c);
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Handle mating
     for (Cell &c : cells) {
@@ -124,9 +156,9 @@ void Group::update() {
             //Add it to the original position
             dis += c.particle.position;
             //Randomly move the cell in the area to create randomness
-            dis += phi::V3(balancedRand(rand) * CELL_CONNECT_DISTANCE,
-                           balancedRand(rand) * CELL_CONNECT_DISTANCE,
-                           balancedRand(rand) * CELL_CONNECT_DISTANCE);
+            dis += phi::V3(balancedRand(rand) * PHYSICS_CONNECT_DISTANCE,
+                           balancedRand(rand) * PHYSICS_CONNECT_DISTANCE,
+                           balancedRand(rand) * PHYSICS_CONNECT_DISTANCE);
             //Finally wrap the new vector that is between the previous vectors
             wrapVector(dis);
             //Make the new cell using the computed
@@ -142,7 +174,11 @@ void Group::update() {
     
     //Update physics
     for (Cell &c : cells)
-        processPhysics(c);
+        c.thread = std::thread([this, &c](){
+            processPhysics(c);
+        });
+    for (Cell &c : cells)
+        c.thread.join();
     
     //Kill off cells that did something they werent supposed to with the laws of physics
     updateDeaths();
@@ -156,23 +192,18 @@ void Group::spawn(unsigned amnt) {
     for (unsigned i = 0; i != amnt; i++) {
         cells.emplace_front(phi::V3(balancedRand(rand) * dimensions.x, balancedRand(rand) * dimensions.y,
                                     balancedRand(rand) * dimensions.z),
-                            phi::V3(balancedRand(rand) * CELL_MAX_INITIAL_VELOCITY,
-                                    balancedRand(rand) * CELL_MAX_INITIAL_VELOCITY,
-                                    balancedRand(rand) * CELL_MAX_INITIAL_VELOCITY),
+                            phi::V3(balancedRand(rand) * PHYSICS_MAX_INITIAL_VELOCITY,
+                                    balancedRand(rand) * PHYSICS_MAX_INITIAL_VELOCITY,
+                                    balancedRand(rand) * PHYSICS_MAX_INITIAL_VELOCITY),
                             rand);
-        
-        cells.emplace_front(cells.front(),
-                            phi::V3(cells.front().particle.position.x + balancedRand(rand) * CELL_CONNECT_DISTANCE,
-                                    cells.front().particle.position.y + balancedRand(rand) * CELL_CONNECT_DISTANCE,
-                                    cells.front().particle.position.z + balancedRand(rand) * CELL_CONNECT_DISTANCE));
-        cells.front().food = CELL_INITIAL_FOOD;
-        wrapVector(cells.front().particle.position);
-        cells.emplace_front(cells.front(),
-                            phi::V3(cells.front().particle.position.x + balancedRand(rand) * CELL_CONNECT_DISTANCE,
-                                    cells.front().particle.position.y + balancedRand(rand) * CELL_CONNECT_DISTANCE,
-                                    cells.front().particle.position.z + balancedRand(rand) * CELL_CONNECT_DISTANCE));
-        cells.front().food = CELL_INITIAL_FOOD;
-        wrapVector(cells.front().particle.position);
+        for (unsigned j = 0; j != CELL_SPAWN_PARTNERS; j++) {
+            cells.emplace_front(cells.front(),
+                                phi::V3(cells.front().particle.position.x + balancedRand(rand) * PHYSICS_CONNECT_DISTANCE,
+                                        cells.front().particle.position.y + balancedRand(rand) * PHYSICS_CONNECT_DISTANCE,
+                                        cells.front().particle.position.z + balancedRand(rand) * PHYSICS_CONNECT_DISTANCE));
+            cells.front().food = CELL_INITIAL_FOOD;
+            wrapVector(cells.front().particle.position);
+        }
     }
 }
 
@@ -218,13 +249,12 @@ void Group::processPhysics(Cell &c) {
         phi::V3 adjPos = c.particle.position;
         adjPos += adjDis;
         
-        c.particle.spring(force, CELL_EQUILIBRIUM_DISTANCE, adjPos);
+        c.particle.spring(force, PHYSICS_EQUILIBRIUM_DISTANCE, adjPos);
+        c.particle.gravitate(-PHYSICS_REPULSION_COEFFICIENT, adjPos, PHYSICS_REPULSION_RADIUS);
     }
     c.particle.advance();
     wrapVector(c.particle.position);
-    if (!isValid(c.particle.position)) {
+    if (!isValid(c.particle.position))
         c.changes.death = true;
-        std::cerr << "Cell disobeyed physics!" << std::endl;
-    }
 }
 

@@ -357,6 +357,8 @@ out vec4 finalColor;
 uniform samplerBuffer orbs;
 uniform int count;
 
+#define RING_RATIO 0.25
+
 void main() {
     vec3 color = vec3(0.0, 0.0, 0.0);
     int i;
@@ -374,7 +376,7 @@ void main() {
                                  texelFetch(orbs, i*7+5).r);
             //Adjusted for ring
             float radius2DSquared = radius * radius - zSquared;
-            float radius2DSquaredAdjusted = radius2DSquared * 0.5;
+            float radius2DSquaredAdjusted = radius2DSquared * RING_RATIO;
             if (dis2DSquared < radius2DSquaredAdjusted)
                 color += orbColor * (sqrt(radius2DSquaredAdjusted) - sqrt(dis2DSquared)) / radius;
             else {
@@ -382,7 +384,7 @@ void main() {
                 float adjusted2D = sqrt(radius2DSquaredAdjusted);
                 //Get positive distance from adjusted radius
                 float disAdjusted =
-                        0.5 * abs(abs(2.0 * sqrt(dis2DSquared) - radius2D - adjusted2D) + adjusted2D - radius2D);
+                        RING_RATIO * abs(abs(2.0 * sqrt(dis2DSquared) - radius2D - adjusted2D) + adjusted2D - radius2D);
                 color -= orbColor * disAdjusted / radius;
             }
         }

@@ -4,6 +4,9 @@ CONFIG -= app_bundle
 CONFIG -= qt
 CONFIG += c++11
 
+QMAKE_CXXFLAGS += -pthread 
+LIBS += -pthread
+
 LIBS += \
     -lgpi \
     -lphitron \

@@ -20,6 +20,8 @@ struct Group {
     //Determine if the vector is a valid origin-centered vector based on the dimensions
     bool isValid(const phi::V3 &delta);
     
+    double distanceSquared(const Cell &a, const Cell &b);
+    
     void processPhysics(Cell &c);
 };
 

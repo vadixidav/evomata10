@@ -26,6 +26,10 @@ Cell::Cell(Cell &a, Cell &b, const phi::V3 &position, std::mt19937 &rand) : neig
     
     //species = (a.species == b.species) ? a.species : ((uint64_t(rand()) << 32) | uint64_t(rand()));
     species = (a.species & 0xFFFFFFFF00000000) | (b.species & 0x00000000FFFFFFFF);
+    
+    //Mutate this cell
+    if (double(rand()) / rand.max() < CELL_MATE_MUTATION_CHANCE)
+        mutate(rand);
 }
 
 Cell::Cell(Cell &parent, const phi::V3 &position) : neighborProgram(parent.neighborProgram),
@@ -94,6 +98,7 @@ void Cell::solveSignal() {
         ioff[2] = 2;
         ioff[3] = food;
         ioff[4] = n.neighbor->food;
+        ioff[5] = n.distance;
         
         signalProgram.startSolve();
         n.decision.signal = signalProgram.solveOutput(0, inputs);
@@ -139,7 +144,7 @@ void Cell::solveNeighbor() {
         //Ensure force is a number
         if (!std::isnormal(n.decision.force))
             n.decision.force = 0;
-        n.decision.send = neighborProgram.solveOutput(4, inputs);
+        n.decision.send = std::abs(neighborProgram.solveOutput(4, inputs));
         if (!std::isnormal(n.decision.send))
             n.decision.send = 0;
         if (std::abs(n.decision.send) > CELL_MAX_SENDABLE_FOOD)
@@ -195,20 +200,30 @@ void Cell::decideMate() {
 }
 
 void Cell::handleStarve() {
-    if (food < CELL_TURN_FOOD_COST) {
+    uint64_t totalCost = CELL_TURN_FOOD_COST;
+    for (Neighbor &n : neighbors) {
+        double potentialCost = std::abs(n.decision.force) * CELL_ACCELERATION_FOOD_COST_COEFFICIENT;
+        if (potentialCost > CELL_MAX_FOOD_VALUE)
+            totalCost += CELL_MAX_FOOD_VALUE;
+        else
+            totalCost += potentialCost;
+    }
+    if (food <= totalCost) {
         //std::cerr << "Cell starved!" << std::endl;
         changes.death = true;
         return;
     }
     
-    food -= CELL_TURN_FOOD_COST;
+    food -= totalCost;
 }
 
 void Cell::mutate(std::mt19937 &rand) {
     neighborProgram.mutate(rand);
     signalProgram.mutate(rand);
     persistentProgram.mutate(rand);
-    species = (uint64_t(rand()) << 32) | uint64_t(rand());
+    
+    if (double(rand())/rand.max() < CELL_MUTATION_SPECIATION_CHANCE)
+        species = (uint64_t(rand()) << 32) | uint64_t(rand());
 }
 
 void connect(Cell &a, Cell &b) {

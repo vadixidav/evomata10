@@ -7,13 +7,12 @@
 #include <chrono>
 #include <thread>
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 400
+#define WINDOW_HEIGHT 400
+#define CLOSENESS 20.0
 
-//Amount of particles in test simulation
-#define OBJECTS 64
-
-#define FPS 30
+#define FPS 1
+#define CYCLES 8
 
 using namespace std;
 using namespace chrono;
@@ -31,9 +30,11 @@ int main() {
     
     steady_clock::time_point lastTime = steady_clock::now();
     
-    Group group(phi::V3(1.0, 1.0, 0.05), 1);
+    Group group(phi::V3(1.0, 1.0, 1.0), 1743);
     
     uint16_t *posbuffer = (uint16_t*)gr.buffer.buffer.map(GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT);
+    
+    uint64_t cycle = 0;
     
     while (true) {
         SDL_Event event;
@@ -44,9 +45,18 @@ int main() {
             }
         }
         
-        group.spawn(group.rand() % 4 == 0);
-        //group.spawn(1);
-        group.update();
+        for (unsigned i = 0; i != CYCLES; i++) {
+            group.spawn(group.rand() % 16 == 0);
+            //group.spawn(4);
+            group.update();
+        }
+        
+        steady_clock::time_point betweenTime = steady_clock::now();
+        
+        if (group.cells.size() > DRAWABLES) {
+            std::cerr << "Error: Exceeded max drawables!" << std::endl;
+            return 1;
+        }
         
         {
             unsigned index;
@@ -55,7 +65,7 @@ int main() {
                 Cell &c = *i;
                 posbuffer[index * 7 + 0] = toHalfFloat(c.particle.position.x);
                 posbuffer[index * 7 + 1] = toHalfFloat(c.particle.position.y);
-                posbuffer[index * 7 + 2] = toHalfFloat(c.particle.position.z);
+                posbuffer[index * 7 + 2] = toHalfFloat(c.particle.position.z / CLOSENESS);
                 
                 posbuffer[index * 7 + 3] = toHalfFloat(((c.species & 0xFF << 0) >> 0) / double(0xFF));
                 posbuffer[index * 7 + 4] = toHalfFloat(((c.species & 0xFF << 8) >> 8) / double(0xFF));
@@ -71,12 +81,19 @@ int main() {
         
         this_thread::sleep_until(lastTime + duration<double>(1.0/FPS));
         steady_clock::time_point thisTime = steady_clock::now();
+        window.flip();
+        
+        cout << "\nCycle: " << cycle << endl;
+        cout << "Count: " << group.cells.size() << endl;
         double timeDelta = duration_cast<duration<double>>(thisTime - lastTime).count();
         cout << "FPS: " << (1.0/timeDelta) << endl;
-        cout << "Count: " << (group.cells.size()) << endl;
-        lastTime = thisTime;
+        double updateDelta = duration_cast<duration<double>>(betweenTime - lastTime).count();
+        cout << "Update duration: " << updateDelta << endl;
+        double renderDelta = duration_cast<duration<double>>(thisTime - betweenTime).count();
+        cout << "Render duration: " << renderDelta << endl;
         
-        window.flip();
+        lastTime = thisTime;
+        cycle++;
     }
     return 0;
 }
