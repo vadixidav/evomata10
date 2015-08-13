@@ -165,7 +165,6 @@ void Cell::totalConsumptions() {
     //We also die if somebody has eaten us
     if (changes.eatenBy != 0) {
         changes.death = true;
-        //std::cerr << "Cell was eaten!" << std::endl;
         return;
     }
     uint64_t sentFood = 0;
@@ -177,7 +176,6 @@ void Cell::totalConsumptions() {
     
     if (sentFood >= food) {
         changes.death = true;
-        //std::cerr << "Cell sent too much food!" << std::endl;
         return;
     }
     food -= sentFood;
@@ -209,7 +207,6 @@ void Cell::handleStarve() {
             totalCost += potentialCost;
     }
     if (food <= totalCost) {
-        //std::cerr << "Cell starved!" << std::endl;
         changes.death = true;
         return;
     }
