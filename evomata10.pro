@@ -8,6 +8,7 @@ QMAKE_CXXFLAGS += -pthread
 LIBS += -pthread
 
 LIBS += \
+    -ldrew \
     -lgpi \
     -lphitron \
     -lSDL2 \
@@ -18,8 +19,7 @@ LIBS += \
 SOURCES += main.cpp \
     cell.cpp \
     group.cpp \
-    draw.cpp \
-    window.cpp
+    draw.cpp
 
 include(deployment.pri)
 qtcAddDeployment()
@@ -27,6 +27,5 @@ qtcAddDeployment()
 HEADERS += \
     cell.h \
     group.h \
-    draw.h \
-    window.h
+    draw.h
 

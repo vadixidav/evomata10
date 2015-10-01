@@ -1,9 +1,8 @@
 #include <iostream>
 #include "gpi/gpi.h"
 #include "phitron/phitron.h"
-#include "window.h"
-#include "group.h"
 #include "draw.h"
+#include "group.h"
 #include <chrono>
 #include <thread>
 
@@ -11,8 +10,8 @@
 #define WINDOW_HEIGHT 400
 #define CLOSENESS 20.0
 
-#define FPS 1
-#define CYCLES 8
+#define FPS 30
+#define CYCLES 2
 
 using namespace std;
 using namespace chrono;
